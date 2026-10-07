@@ -1,0 +1,48 @@
+name: Import GitLab releases
+
+# A lancer une seule fois (onglet Actions -> Run workflow) : recopie les releases
+# historiques de Bastien (gitlab.com/Gryvernn/Vega-Migration-tool, 3.7.8 -> 5.0.0)
+# avec leurs exe dans le depot public des binaires. Les releases deja presentes
+# sont ignorees, et aucune n'est marquee "latest" : l'auto-mise a jour reste sur
+# la derniere release publiee par build.yml.
+on:
+  workflow_dispatch:
+
+env:
+  RELEASES_REPO: dazcookiez/toolbox_releases
+  GITLAB_API: https://gitlab.com/api/v4/projects/Gryvernn%2FVega-Migration-tool
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Import releases
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -fsSL "$GITLAB_API/releases?per_page=100" -o releases.json
+          echo "$(jq length releases.json) release(s) GitLab trouvee(s)"
+          # Du plus ancien au plus recent, pour garder l'ordre chronologique.
+          jq -c 'reverse | .[]' releases.json | while read -r rel; do
+            tag=$(jq -r .tag_name <<<"$rel")
+            if gh release view "$tag" --repo "$RELEASES_REPO" > /dev/null 2>&1; then
+              echo "$tag : deja present, ignore"
+              continue
+            fi
+            rm -rf assets && mkdir assets
+            jq -r '.assets.links[] | "\(.name)\t\(.url)"' <<<"$rel" | while IFS=$'\t' read -r name url; do
+              curl -fsSL --retry 3 "$url" -o "assets/$name"
+            done
+            {
+              echo "$(jq -r .commit.title <<<"$rel")"
+              echo
+              echo "_Release importée depuis GitLab (Bastien Tillier), publiée le $(jq -r '.released_at[:10]' <<<"$rel")._"
+            } > notes.md
+            gh release create "$tag" assets/* \
+              --repo "$RELEASES_REPO" \
+              --title "$(jq -r .name <<<"$rel")" \
+              --notes-file notes.md \
+              --latest=false
+            echo "$tag : importe ($(ls assets | wc -l) fichier(s))"
+          done
