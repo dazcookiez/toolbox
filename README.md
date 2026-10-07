@@ -292,7 +292,7 @@ Visibles via clic-droit → Propriétés → Détails sur `vega_toolbox.exe` :
 
 | Version | Faits marquants |
 |---|---|
-| **5.0.2** | **Téléchargement** : nouveau canal **VEGA6 BETA** (`VEGA6/PROD/BETA/`) listé à côté de VEGA6 PROD, extraction automatique dans `vega.dos\V6` comme PROD. **Reprise du projet sur GitHub** : auto-mise à jour via GitHub Releases avec vérification SHA-256 (fin de GitLab), nom d'exe fixe `vega_toolbox.exe` rétabli, build et publication des 3 binaires par GitHub Actions. Les postes en 5.0.0 / 5.0.1 doivent être mis à jour une fois manuellement. |
+| **5.0.2** | **Téléchargement** : nouveau canal **VEGA6 BETA** (`VEGA6/PROD/BETA/`) listé à côté de VEGA6 PROD, extraction automatique dans `vega.dos\V6` comme PROD. **Reprise du projet sur GitHub** : auto-mise à jour via GitHub Releases avec vérification SHA-256 (fin de GitLab), nom d'exe fixe `vega_toolbox.exe` rétabli, contact support : Cristian (info@microc.fr), build et publication des 3 binaires par GitHub Actions. Les postes en 5.0.0 / 5.0.1 doivent être mis à jour une fois manuellement. |
 | **5.0.1** | **RetailForce** : installeur mis à jour de 1.11.2 → 1.11.21.7255 (x64 + x86), URL `retailforce.cloud/downloads/Version 1.11.21/...`. **Login** : logique de mot de passe CryptoTools.dll remplacée par règle locale — doit commencer et finir par `!`, minimum 4 caractères (ex. `!xx!`). Suppression des dépendances pythonnet/clr/CryptoTools.dll du build. |
 | **5.0.0** | **Support Windows 7 SP1 -> Server 2012** : second binaire (x86 / x64) en Python 3.7, couche de compatibilite, UCRT embarque, canal de mise a jour dedie. Detection automatique d'architecture pour Notepad++/JsonTools et RetailForce. Desinstallation CerberIT en cascade. Journal de crash. Correctifs : ports HFSQL, raccourcis clavier invalides, detection HFSQL 32 bits. |
 | **4.0.8** | Nouveau module **CerberIT** (sauvegarde Kiwi Backup) : installation silencieuse, enregistrement par clé de contrat, sélection visuelle des dossiers, planning, diagnostic et désinstallation. Test SMTP plus réactif (timeout 30 s → 10 s). |
@@ -306,9 +306,9 @@ Visibles via clic-droit → Propriétés → Détails sur `vega_toolbox.exe` :
 
 En cas de problème, contactez l'équipe support interne :
 
-- **Bastien Tillier** — auteur principal
-- **David Chalengeas**
-- **David Viard**
+- **Cristian** — mainteneur — [info@microc.fr](mailto:info@microc.fr)
+
+Auteur d'origine : Bastien Tillier (jusqu'à la 5.0.0).
 
 L'écran **Infos** dans l'application contient les coordonnées détaillées et un bouton de contact direct.
 
