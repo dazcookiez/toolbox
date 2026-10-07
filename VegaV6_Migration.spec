@@ -53,7 +53,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='vega_toolbox_5.0.1',
+    name='vega_toolbox',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

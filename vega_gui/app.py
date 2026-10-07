@@ -720,7 +720,7 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
             try:
                 self.audit.log_action(
                     "update_check", status="failure",
-                    details={"raison": "API GitLab inaccessible"},
+                    details={"raison": "API GitHub inaccessible"},
                     error=str(exc),
                 )
             except Exception:
@@ -755,7 +755,7 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
             if not result:
                 self.show_info(
                     "Vérification des mises à jour",
-                    "Impossible de comparer les versions (réponse vide de GitLab).",
+                    "Impossible de comparer les versions (réponse vide de GitHub).",
                 )
                 try:
                     self.audit.log_action(
@@ -823,14 +823,14 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
             try:
                 self.audit.log_action(
                     "update_check_manual", status="failure",
-                    details={"raison": "API GitLab inaccessible"},
+                    details={"raison": "API GitHub inaccessible"},
                     error=str(exc),
                 )
             except Exception:
                 pass
             self.show_info(
                 "Vérification des mises à jour",
-                "Impossible de joindre GitLab pour vérifier les mises à jour.\n\n"
+                "Impossible de joindre GitHub pour vérifier les mises à jour.\n\n"
                 f"Détail : {exc}",
             )
 

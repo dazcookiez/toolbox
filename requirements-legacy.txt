@@ -1,0 +1,9 @@
+# Build legacy (Windows 7 SP1 / Server 2008 R2 -> Server 2012) — Python 3.8 x86 et x64
+# Versions epinglees : voir README, section "Construire le build legacy".
+pyinstaller==5.13.2
+pythonnet==2.5.2
+pillow<10
+msal
+httpx
+pyyaml
+certifi
