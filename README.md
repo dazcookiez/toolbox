@@ -20,6 +20,7 @@
 
 <br>
 
+[**Télécharger**](#️-télécharger) &nbsp;·&nbsp;
 [**Vue d'ensemble**](#-vue-densemble) &nbsp;·&nbsp;
 [**Architecture**](#-architecture) &nbsp;·&nbsp;
 [**Modules**](#-modules) &nbsp;·&nbsp;
@@ -32,6 +33,22 @@
 </div>
 
 <br>
+
+---
+
+## ⬇️ Télécharger
+
+<div align="center">
+
+| Poste | Dernière version |
+|:--|:--|
+| **Windows 8.1+ / Server 2012 R2+** *(cas général)* | [**vega_toolbox.exe**](https://github.com/dazcookiez/toolbox_releases/releases/latest/download/vega_toolbox.exe) |
+| Windows 7 SP1 → Server 2012 — 64 bits | [vega_toolbox_legacy_x64.exe](https://github.com/dazcookiez/toolbox_releases/releases/latest/download/vega_toolbox_legacy_x64.exe) |
+| Windows 7 SP1 → Server 2012 — 32 bits | [vega_toolbox_legacy_x86.exe](https://github.com/dazcookiez/toolbox_releases/releases/latest/download/vega_toolbox_legacy_x86.exe) |
+
+[Toutes les versions et notes de version](https://github.com/dazcookiez/toolbox_releases/releases)
+
+</div>
 
 ---
 
