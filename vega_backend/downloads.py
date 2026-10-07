@@ -13,7 +13,8 @@ from ._common import (
     STATIC_DOWNLOAD_ITEMS,
     SmtpTestError,
     ToolLogger,
-    VEGA6_INDEX_URL,
+    VEGA6_CHANNELS,
+    VEGA6_GROUPS,
 )
 from . import _download_core
 from ._download_core import DownloadCancelled  # re-export pour compatibilite
@@ -46,9 +47,23 @@ class DownloadManager:
         return [self._normalize_item(item, dynamic=False) for item in STATIC_DOWNLOAD_ITEMS]
 
     def list_vega6_items(self):
-        # Les paquets VEGA6 sont découverts en direct depuis l'index distant.
-        self.logger.info("Actualisation de la liste VEGA6/PROD.")
-        request = Request(VEGA6_INDEX_URL, headers={"User-Agent": DOWNLOAD_USER_AGENT})
+        # Les paquets VEGA6 sont découverts en direct depuis les index distants
+        # (PROD et BETA). Un canal indisponible n'empeche pas d'afficher l'autre.
+        items = []
+        errors = []
+        for group, index_url in VEGA6_CHANNELS:
+            try:
+                items.extend(self._list_vega6_channel(group, index_url))
+            except Exception as exc:
+                self.logger.warn(f"Liste {group} indisponible : {exc}")
+                errors.append(exc)
+        if errors and len(errors) == len(VEGA6_CHANNELS):
+            raise errors[0]
+        return items
+
+    def _list_vega6_channel(self, group, index_url):
+        self.logger.info(f"Actualisation de la liste {group}.")
+        request = Request(index_url, headers={"User-Agent": DOWNLOAD_USER_AGENT})
         with urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response:
             html = response.read().decode("utf-8", errors="ignore")
 
@@ -57,12 +72,13 @@ class DownloadManager:
 
         items = []
         seen = set()
+        id_prefix = group.lower().replace(" ", "_")
         for href in parser.links:
             if not href or href.startswith("?") or href.startswith("/"):
                 continue
             if href.endswith("/"):
                 continue
-            url = urljoin(VEGA6_INDEX_URL, href)
+            url = urljoin(index_url, href)
             filename = unquote(Path(urlsplit(url).path).name)
             if not filename or filename.lower() == "parent directory":
                 continue
@@ -75,9 +91,9 @@ class DownloadManager:
             items.append(
                 self._normalize_item(
                     {
-                        "id": f"vega6_{filename}",
+                        "id": f"{id_prefix}_{filename}",
                         "name": filename,
-                        "group": "VEGA6 PROD",
+                        "group": group,
                         "url": url,
                     },
                     dynamic=True,
@@ -85,7 +101,7 @@ class DownloadManager:
             )
 
         items.sort(key=lambda item: item["name"].lower(), reverse=True)
-        self.logger.info(f"{len(items)} fichier(s) VEGA6 disponible(s) trouvé(s).")
+        self.logger.info(f"{len(items)} fichier(s) {group} disponible(s) trouvé(s).")
         return items
 
     def download_file(self, item, target_dir):
@@ -119,7 +135,7 @@ class DownloadManager:
         extracted = []
 
         for result in download_results:
-            if result.get("group") != "VEGA6 PROD":
+            if result.get("group") not in VEGA6_GROUPS:
                 continue
             archive_path = Path(result["target_path"])
             if archive_path.suffix.lower() != ".zip":

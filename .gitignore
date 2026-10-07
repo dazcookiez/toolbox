@@ -13,3 +13,7 @@ dist/vega_toolbox_audit.json
 dist/vega_toolbox_audit.html
 fiscalService.config.json
 .claude/
+dist/
+*.exe
+vega_toolbox_audit.json
+vega_toolbox_audit.html

@@ -1,0 +1,122 @@
+name: Build
+
+# - Pull request / push sur main : construit les 3 exe (verification uniquement).
+# - "Run workflow" (onglet Actions) avec publish=true : construit, puis publie
+#   la release vX.Y.Z (version lue dans vega_gui/theme.py) sur le depot public
+#   des binaires, que l'auto-mise a jour des postes interroge.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publier la release (sinon simple build)"
+        type: boolean
+        default: false
+      notes:
+        description: "Notes de version affichees dans la fenetre de mise a jour"
+        type: string
+        default: ""
+
+env:
+  RELEASES_REPO: dazcookiez/toolbox_releases
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: modern
+            python: "3.12"
+            arch: x64
+            spec: VegaV6_Migration.spec
+            requirements: requirements.txt
+            exe: vega_toolbox.exe
+          - flavor: legacy_x64
+            python: "3.8"
+            arch: x64
+            spec: VegaV6_Migration_legacy.spec
+            requirements: requirements-legacy.txt
+            exe: vega_toolbox_legacy_x64.exe
+          - flavor: legacy_x86
+            python: "3.8"
+            arch: x86
+            spec: VegaV6_Migration_legacy.spec
+            requirements: requirements-legacy.txt
+            exe: vega_toolbox_legacy_x86.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: ${{ matrix.arch }}
+      - name: Install dependencies
+        run: python -m pip install -r ${{ matrix.requirements }}
+      - name: Check version is consistent
+        shell: python
+        run: |
+          import re
+          app = re.search(r'APP_VERSION = "([^"]+)"', open("vega_gui/theme.py", encoding="utf-8").read()).group(1)
+          info = open("version_info.txt", encoding="utf-8").read()
+          assert f"u'ProductVersion', u'{app}'" in info, f"version_info.txt ne correspond pas a APP_VERSION {app}"
+          print("Version", app)
+      - name: Build
+        run: python -m PyInstaller ${{ matrix.spec }} --noconfirm --clean
+      - name: Check output
+        shell: pwsh
+        run: |
+          $exe = "dist/${{ matrix.exe }}"
+          if (-not (Test-Path $exe)) { throw "$exe introuvable" }
+          "{0} : {1:N1} Mo" -f $exe, ((Get-Item $exe).Length / 1MB)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.flavor }}
+          path: dist/${{ matrix.exe }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Write latest.json
+        env:
+          NOTES: ${{ inputs.notes }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re
+          version = re.search(r'APP_VERSION = "([^"]+)"', pathlib.Path("vega_gui/theme.py").read_text(encoding="utf-8")).group(1)
+          sums = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(pathlib.Path("out").glob("*.exe"))}
+          manifest = {"version": version, "notes": os.environ.get("NOTES", ""), "sha256": sums}
+          pathlib.Path("out/latest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"VERSION={version}\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          if gh release view "v$VERSION" --repo "$RELEASES_REPO" > /dev/null 2>&1; then
+            echo "La release v$VERSION existe deja : bumpez APP_VERSION avant de publier."
+            exit 1
+          fi
+          gh release create "v$VERSION" out/*.exe out/latest.json \
+            --repo "$RELEASES_REPO" \
+            --title "Vega Toolbox $VERSION" \
+            --notes "$NOTES"
+      - name: Tag source
+        run: |
+          git tag "v$VERSION"
+          git push origin "v$VERSION"

@@ -49,6 +49,13 @@ FILE_ATTRIBUTE_HIDDEN = 0x2
 FILE_ATTRIBUTE_NORMAL = 0x80
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 VEGA6_INDEX_URL = "https://telechargement.quatuhore.fr/VEGA6/PROD/"
+VEGA6_BETA_INDEX_URL = "https://telechargement.quatuhore.fr/VEGA6/PROD/BETA/"
+# Canaux VEGA6 relus sur le serveur : (groupe affiche, url de l'index).
+VEGA6_CHANNELS = (
+    ("VEGA6 PROD", VEGA6_INDEX_URL),
+    ("VEGA6 BETA", VEGA6_BETA_INDEX_URL),
+)
+VEGA6_GROUPS = tuple(group for group, _url in VEGA6_CHANNELS)
 DOWNLOAD_BUFFER_SIZE = 1024 * 1024
 DOWNLOAD_TIMEOUT = 60
 DOWNLOAD_USER_AGENT = "VegaMigrationTool/2.10.1"

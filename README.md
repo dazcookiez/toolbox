@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-5.0.1-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-5.0.2-blue?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/plateforme-Windows%207%20%E2%86%92%2011-0078d6?style=flat-square" alt="Windows">
   <img src="https://img.shields.io/badge/python-3.12%20%2F%203.7-3776ab?style=flat-square" alt="Python">
   <img src="https://img.shields.io/badge/UI-Tkinter-orange?style=flat-square" alt="Tkinter">
@@ -115,11 +115,11 @@ moderne, qui ne demarrerait pas.
 ### Construire le build legacy
 
 ```bash
-pip install pythonnet==2.5.2 pyinstaller==5.13.2 "pillow<10" msal httpx pyyaml certifi
+pip install -r requirements-legacy.txt
 python -m PyInstaller VegaV6_Migration_legacy.spec --noconfirm --clean
 ```
 
-A lancer avec **Python 3.7** (x86 ou x64) : le nom de sortie suit
+A lancer avec **Python 3.8** (x86 ou x64) : le nom de sortie suit
 l'architecture de l'interpreteur.
 
 ---
@@ -135,9 +135,9 @@ Téléchargez `vega_toolbox.exe` et lancez-le. L'application demandera une élé
 ### Pour les développeurs
 
 ```bash
-git clone https://gitlab.com/Gryvernn/Vega-Migration-tool.git
-cd Vega-Migration-tool
-pip install pillow msal truststore httpx pythonnet pyyaml pyinstaller
+git clone https://github.com/dazcookiez/toolbox.git
+cd toolbox
+pip install -r requirements.txt
 python script.py
 ```
 
@@ -145,13 +145,13 @@ python script.py
 
 ## Auto-mise à jour
 
-Au démarrage, Vega Toolbox interroge `vega_gui/theme.py` sur GitLab (raw) pour comparer la version locale à la dernière publiée. Si une mise à jour est disponible, une fenêtre de confirmation s'affiche après quelques secondes.
+Au démarrage, Vega Toolbox lit `latest.json` dans la dernière release du dépôt public des binaires ([dazcookiez/toolbox_releases](https://github.com/dazcookiez/toolbox_releases/releases)) pour comparer la version locale à la dernière publiée. Si une mise à jour est disponible, une fenêtre de confirmation s'affiche après quelques secondes.
 
 Le pipeline de mise à jour :
 
-1. Téléchargement du nouvel exécutable dans `%TEMP%`.
+1. Téléchargement du nouvel exécutable dans `%TEMP%`, puis vérification de son empreinte **SHA-256** contre celle publiée dans `latest.json` (refus si elle diffère).
 2. Le processus courant se termine immédiatement (`os._exit`).
-3. Un script batch détaché attend, force-kill tout `vega_toolbox.exe` résiduel via `taskkill /f`, déplace le nouveau binaire, force la lecture complète pour finaliser le scan Windows Defender, puis relance l'application.
+3. Un script batch détaché attend, force-kill l'exécutable courant résiduel via `taskkill /f`, déplace le nouveau binaire, force la lecture complète pour finaliser le scan Windows Defender, puis relance l'application.
 
 L'exclusion Defender appliquée au démarrage rend ce processus silencieux et sans popup.
 
@@ -223,7 +223,7 @@ Vega-Migration-tool/
     ├── hfsql_installer.py       # Installation / MAJ / désinstallation moteur HFSQL PCSoft
     ├── cerberit.py              # Sauvegarde CerberIT/Kiwi : install /S, register, kiwi.conf, diagnostic
     ├── audit.py                 # Journal d'audit des actions (export HTML/JSON)
-    ├── updater.py               # Auto-mise à jour via GitLab raw
+    ├── updater.py               # Auto-mise à jour via GitHub Releases (+ SHA-256)
     └── defender.py              # Exclusion Windows Defender pour les _MEI*
 ```
 
@@ -237,7 +237,7 @@ Vega-Migration-tool/
 python -m PyInstaller VegaV6_Migration.spec --noconfirm --clean
 ```
 
-Le binaire généré (~26 Mo) se trouve dans `dist/vega_toolbox_<version>.exe`. Il embarque tkinter, les images, les icônes, MSAL, truststore, PyYAML et tous les modules métier.
+Le binaire généré (~26 Mo) se trouve dans `dist/vega_toolbox.exe` (nom fixe : l'auto-mise à jour en dépend). Il embarque tkinter, les images, les icônes, MSAL, truststore, PyYAML et tous les modules métier.
 
 ### Convention de versioning
 
@@ -247,7 +247,17 @@ Format `X.Y.Z` (pas SemVer strict) :
 - `Y` — nouvelle fonctionnalité ou groupe de correctifs ;
 - `Z` — correctif mineur.
 
-La version unique est dans `vega_gui/theme.py` (`APP_VERSION`) et `version_info.txt` (métadonnées Windows). Les deux doivent être synchronisées à chaque release.
+La version unique est dans `vega_gui/theme.py` (`APP_VERSION`) et `version_info.txt` (métadonnées Windows). Les deux doivent être synchronisées à chaque release (le build GitHub Actions échoue sinon).
+
+### Publier une release
+
+Les trois exécutables sont construits par GitHub Actions (`.github/workflows/build.yml`) à chaque pull request et à chaque push sur `main`. Pour publier :
+
+1. Bumper `APP_VERSION` et `version_info.txt`, ajouter la ligne du journal des versions, merger sur `main`.
+2. Onglet **Actions** → **Build** → **Run workflow** sur `main`, cocher **publish**, saisir les notes de version.
+3. Le workflow publie `vX.Y.Z` (les 3 exe + `latest.json` avec leurs SHA-256) sur `dazcookiez/toolbox_releases`, puis crée le tag `vX.Y.Z` sur ce dépôt.
+
+Prérequis (une seule fois) : un secret `RELEASES_TOKEN` dans ce dépôt — jeton GitHub *fine-grained* avec le droit **Contents: Read and write** sur `dazcookiez/toolbox_releases`.
 
 ### Convention de logging
 
@@ -270,8 +280,8 @@ Visibles via clic-droit → Propriétés → Détails sur `vega_toolbox.exe` :
 | Description du fichier | vega toolbox |
 | Société | Zucchetti |
 | Nom du produit | Vega Toolbox |
-| Version du fichier | 5.0.1.0 |
-| Version du produit | 5.0.1 |
+| Version du fichier | 5.0.2.0 |
+| Version du produit | 5.0.2 |
 | Copyright | © Zucchetti |
 | Langue | Français (France) |
 | Nom de fichier original | vega_toolbox.exe |
@@ -282,6 +292,7 @@ Visibles via clic-droit → Propriétés → Détails sur `vega_toolbox.exe` :
 
 | Version | Faits marquants |
 |---|---|
+| **5.0.2** | **Téléchargement** : nouveau canal **VEGA6 BETA** (`VEGA6/PROD/BETA/`) listé à côté de VEGA6 PROD, extraction automatique dans `vega.dos\V6` comme PROD. **Reprise du projet sur GitHub** : auto-mise à jour via GitHub Releases avec vérification SHA-256 (fin de GitLab), nom d'exe fixe `vega_toolbox.exe` rétabli, contact support : Cristian (info@microc.fr), build et publication des 3 binaires par GitHub Actions. Les postes en 5.0.0 / 5.0.1 doivent être mis à jour une fois manuellement. |
 | **5.0.1** | **RetailForce** : installeur mis à jour de 1.11.2 → 1.11.21.7255 (x64 + x86), URL `retailforce.cloud/downloads/Version 1.11.21/...`. **Login** : logique de mot de passe CryptoTools.dll remplacée par règle locale — doit commencer et finir par `!`, minimum 4 caractères (ex. `!xx!`). Suppression des dépendances pythonnet/clr/CryptoTools.dll du build. |
 | **5.0.0** | **Support Windows 7 SP1 -> Server 2012** : second binaire (x86 / x64) en Python 3.7, couche de compatibilite, UCRT embarque, canal de mise a jour dedie. Detection automatique d'architecture pour Notepad++/JsonTools et RetailForce. Desinstallation CerberIT en cascade. Journal de crash. Correctifs : ports HFSQL, raccourcis clavier invalides, detection HFSQL 32 bits. |
 | **4.0.8** | Nouveau module **CerberIT** (sauvegarde Kiwi Backup) : installation silencieuse, enregistrement par clé de contrat, sélection visuelle des dossiers, planning, diagnostic et désinstallation. Test SMTP plus réactif (timeout 30 s → 10 s). |
@@ -295,9 +306,9 @@ Visibles via clic-droit → Propriétés → Détails sur `vega_toolbox.exe` :
 
 En cas de problème, contactez l'équipe support interne :
 
-- **Bastien Tillier** — auteur principal
-- **David Chalengeas**
-- **David Viard**
+- **Cristian** — mainteneur — [info@microc.fr](mailto:info@microc.fr)
+
+Auteur d'origine : Bastien Tillier (jusqu'à la 5.0.0).
 
 L'écran **Infos** dans l'application contient les coordonnées détaillées et un bouton de contact direct.
 

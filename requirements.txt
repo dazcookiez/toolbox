@@ -1,0 +1,7 @@
+# Build moderne (Windows 8.1+ / Server 2012 R2+) — Python 3.12
+pyinstaller
+pillow
+msal
+truststore
+httpx[http2]
+pyyaml

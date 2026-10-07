@@ -1,25 +1,24 @@
-"""Auto-update via GitLab Releases (API publique).
+"""Auto-update via GitHub Releases.
 
-Bascule de l'ancienne methode "raw git" (commit de l'exe dans le repo) vers
-GitLab Releases qui hebergent le binaire dans le package registry generique.
-Avantages :
-  - Plus de bloat dans l'historique git (un exe = +25 Mo par release)
-  - Releases listables, traçables, avec notes de version dans GitLab UI
-  - Pattern standard, API stable
+Les binaires sont publies dans un depot GitHub PUBLIC dedie (UPDATE_REPO),
+le code source restant dans un depot prive. Chaque release contient :
+  - les exe (un par saveur de build, cf. EXE_ASSET_NAMES)
+  - latest.json : { "version", "notes", "sha256": { nom_exe: empreinte } }
 
 Pipeline :
-  1. check() interroge /releases/permalink/latest -> tag + URL de l'asset
-  2. download_and_apply() telecharge l'asset (URL fournie par check)
-  3. Spawn d'un batch externe qui attend la fermeture du process courant,
-     remplace l'exe, relance. Le caller (UI) doit appeler sys.exit immediatement.
+  1. check() lit releases/latest/download/latest.json (simple redirection
+     GitHub, pas de limite de l'API REST) -> version + empreinte attendue
+  2. download_and_apply() telecharge l'exe de CETTE version, verifie son
+     SHA-256, puis spawn un batch externe qui attend la fermeture du process
+     courant, remplace l'exe et relance. Le caller (UI) doit appeler sys.exit
+     immediatement.
 
-Fallback : si l'API Releases echoue (reseau, repo passe en prive, etc.), on
-retombe sur l'ancien fetch raw `vega_gui/theme.py` + raw `dist/vega_toolbox.exe`
-pour ne pas casser les anciennes versions deployees pendant la transition.
+Un exe dont l'empreinte ne correspond pas a latest.json n'est jamais applique.
 
 Pre-requis : version compilee (sys.frozen). En mode source, l'update affiche
 juste la nouvelle version sans rien faire.
 """
+import hashlib
 import json
 import re
 import shutil
@@ -33,11 +32,9 @@ from ._common import DOWNLOAD_USER_AGENT, OperationError
 from ._compat import build_flavor
 
 
-GITLAB_PROJECT_PATH = "Gryvernn/Vega-Migration-tool"
-# Path URL-encode pour l'API
-_PROJECT_ID = GITLAB_PROJECT_PATH.replace("/", "%2F")
-GITLAB_API_BASE = f"https://gitlab.com/api/v4/projects/{_PROJECT_ID}"
-RELEASES_LATEST_URL = f"{GITLAB_API_BASE}/releases/permalink/latest"
+UPDATE_REPO = "dazcookiez/toolbox_releases"
+_RELEASES_BASE = f"https://github.com/{UPDATE_REPO}/releases"
+LATEST_MANIFEST_URL = f"{_RELEASES_BASE}/latest/download/latest.json"
 
 # Nom de l'asset a telecharger selon la saveur du build. CRITIQUE : un poste
 # Windows 7 execute le build legacy (Python 3.8) ; s'il telechargeait l'exe
@@ -52,13 +49,6 @@ EXE_ASSET_NAMES = {
 
 def expected_asset_name():
     return EXE_ASSET_NAMES.get(build_flavor(), "vega_toolbox.exe")
-
-
-# Fallback raw URLs (ancienne methode, conservee pour transition)
-_RAW_BRANCH = "master"
-_RAW_BASE = f"https://gitlab.com/{GITLAB_PROJECT_PATH}/-/raw/{_RAW_BRANCH}"
-RAW_VERSION_URL = f"{_RAW_BASE}/vega_gui/theme.py"
-RAW_EXE_URL = f"{_RAW_BASE}/dist/{expected_asset_name()}"
 
 
 def parse_version(value):
@@ -80,36 +70,30 @@ def _http_get_json(url, timeout=15):
 
 
 def fetch_latest_release():
-    # GET /releases/permalink/latest -> JSON avec tag_name, assets.links[]
-    data = _http_get_json(RELEASES_LATEST_URL)
-    tag = data.get("tag_name", "")
-    version = tag.lstrip("v")
+    # latest.json de la derniere release -> version, notes, empreinte de notre exe.
+    data = _http_get_json(LATEST_MANIFEST_URL)
+    version = str(data.get("version", "")).lstrip("v")
     # On exige une correspondance EXACTE avec l'asset de notre saveur : pas de
     # repli sur un autre binaire, qui rendrait le poste inutilisable.
-    wanted = expected_asset_name().lower()
-    exe_url = None
-    for link in (data.get("assets") or {}).get("links") or []:
-        if (link.get("name") or "").strip().lower() == wanted:
-            exe_url = link.get("url") or link.get("direct_asset_url")
-            break
+    wanted = expected_asset_name()
+    sha256 = (data.get("sha256") or {}).get(wanted)
+    exe_url = f"{_RELEASES_BASE}/download/v{version}/{wanted}" if sha256 else None
     return {
         "version": version,
-        "tag": tag,
+        "tag": f"v{version}",
         "exe_url": exe_url,
-        "name": data.get("name"),
-        "description": data.get("description") or "",
+        "sha256": (sha256 or "").lower() or None,
+        "name": f"Vega Toolbox {version}",
+        "description": data.get("notes") or "",
     }
 
 
-def fetch_remote_version_raw():
-    # Ancienne methode : parse theme.py distant.
-    req = Request(RAW_VERSION_URL, headers={"User-Agent": DOWNLOAD_USER_AGENT})
-    with urlopen(req, timeout=15) as resp:
-        body = resp.read().decode("utf-8", errors="ignore")
-    m = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', body)
-    if not m:
-        raise OperationError("Impossible de parser la version distante (theme.py).")
-    return m.group(1).strip()
+def _file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 class UpdateChecker:
@@ -123,24 +107,16 @@ class UpdateChecker:
         return bool(getattr(sys, "frozen", False))
 
     def check(self):
-        # Tente d'abord les GitLab Releases. Si echec, fallback raw.
-        # Retourne dict { current, remote, has_update, exe_url, source } ou None.
+        # Retourne dict { current, remote, has_update, exe_url, sha256, source } ou None.
         try:
             rel = fetch_latest_release()
-            remote_version = rel["version"]
-            exe_url = rel["exe_url"]
-            source = "release"
-            release_notes = rel.get("description", "")
-        except Exception as exc_rel:
-            self.logger.warn(f"GitLab Releases indisponible ({exc_rel}), fallback raw...")
-            try:
-                remote_version = fetch_remote_version_raw()
-                exe_url = RAW_EXE_URL
-                source = "raw"
-                release_notes = ""
-            except Exception as exc_raw:
-                self.logger.warn(f"Verification mise a jour impossible : {exc_raw}")
-                return None
+        except Exception as exc:
+            self.logger.warn(f"Verification mise a jour impossible : {exc}")
+            return None
+        remote_version = rel["version"]
+        exe_url = rel["exe_url"]
+        source = "release"
+        release_notes = rel.get("description", "")
 
         cur = parse_version(self.current_version)
         rem = parse_version(remote_version)
@@ -151,6 +127,7 @@ class UpdateChecker:
             "remote": remote_version,
             "has_update": rem > cur,
             "exe_url": exe_url,
+            "sha256": rel["sha256"],
             "source": source,
             "release_notes": release_notes,
         }
@@ -174,9 +151,10 @@ class UpdateChecker:
         if not self.last_check or not self.last_check.get("exe_url"):
             raise OperationError(
                 "Impossible de localiser l'executable de mise a jour "
-                "(release GitLab introuvable et fallback raw indisponible)."
+                "(release GitHub introuvable ou sans binaire pour ce poste)."
             )
         exe_url = self.last_check["exe_url"]
+        expected_sha256 = self.last_check.get("sha256")
 
         notify("download", "Telechargement de la nouvelle version...")
         target = Path(tempfile.gettempdir()) / "vega_toolbox_update.exe"
@@ -190,6 +168,18 @@ class UpdateChecker:
         if not target.exists() or target.stat().st_size < 1_000_000:
             raise OperationError(
                 f"Update telechargee invalide (taille = {target.stat().st_size if target.exists() else 0})."
+            )
+
+        notify("verify", "Verification de l'empreinte SHA-256...")
+        actual_sha256 = _file_sha256(target)
+        if not expected_sha256 or actual_sha256 != expected_sha256:
+            try:
+                target.unlink()
+            except OSError:
+                pass
+            raise OperationError(
+                "Update refusee : l'empreinte SHA-256 du fichier telecharge ne "
+                "correspond pas a celle publiee dans la release."
             )
 
         current_exe = Path(sys.executable)
@@ -217,7 +207,7 @@ class UpdateChecker:
         script = (
             "@echo off\r\n"
             "ping -n 3 127.0.0.1 > nul\r\n"
-            "taskkill /f /im vega_toolbox.exe > nul 2>&1\r\n"
+            f'taskkill /f /im "{Path(target_exe).name}" > nul 2>&1\r\n'
             "ping -n 2 127.0.0.1 > nul\r\n"
             ":retry\r\n"
             f'move /y "{source_exe}" "{target_exe}" > nul 2>&1\r\n'
