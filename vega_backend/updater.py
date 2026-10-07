@@ -32,7 +32,7 @@ from ._common import DOWNLOAD_USER_AGENT, OperationError
 from ._compat import build_flavor
 
 
-UPDATE_REPO = "dazcookiez/toolbox-releases"
+UPDATE_REPO = "dazcookiez/toolbox_releases"
 _RELEASES_BASE = f"https://github.com/{UPDATE_REPO}/releases"
 LATEST_MANIFEST_URL = f"{_RELEASES_BASE}/latest/download/latest.json"
 

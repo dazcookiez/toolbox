@@ -145,7 +145,7 @@ python script.py
 
 ## Auto-mise à jour
 
-Au démarrage, Vega Toolbox lit `latest.json` dans la dernière release du dépôt public des binaires ([dazcookiez/toolbox-releases](https://github.com/dazcookiez/toolbox-releases/releases)) pour comparer la version locale à la dernière publiée. Si une mise à jour est disponible, une fenêtre de confirmation s'affiche après quelques secondes.
+Au démarrage, Vega Toolbox lit `latest.json` dans la dernière release du dépôt public des binaires ([dazcookiez/toolbox_releases](https://github.com/dazcookiez/toolbox_releases/releases)) pour comparer la version locale à la dernière publiée. Si une mise à jour est disponible, une fenêtre de confirmation s'affiche après quelques secondes.
 
 Le pipeline de mise à jour :
 
@@ -255,9 +255,9 @@ Les trois exécutables sont construits par GitHub Actions (`.github/workflows/bu
 
 1. Bumper `APP_VERSION` et `version_info.txt`, ajouter la ligne du journal des versions, merger sur `main`.
 2. Onglet **Actions** → **Build** → **Run workflow** sur `main`, cocher **publish**, saisir les notes de version.
-3. Le workflow publie `vX.Y.Z` (les 3 exe + `latest.json` avec leurs SHA-256) sur `dazcookiez/toolbox-releases`, puis crée le tag `vX.Y.Z` sur ce dépôt.
+3. Le workflow publie `vX.Y.Z` (les 3 exe + `latest.json` avec leurs SHA-256) sur `dazcookiez/toolbox_releases`, puis crée le tag `vX.Y.Z` sur ce dépôt.
 
-Prérequis (une seule fois) : un secret `RELEASES_TOKEN` dans ce dépôt — jeton GitHub *fine-grained* avec le droit **Contents: Read and write** sur `dazcookiez/toolbox-releases`.
+Prérequis (une seule fois) : un secret `RELEASES_TOKEN` dans ce dépôt — jeton GitHub *fine-grained* avec le droit **Contents: Read and write** sur `dazcookiez/toolbox_releases`.
 
 ### Convention de logging
 

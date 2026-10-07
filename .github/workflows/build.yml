@@ -20,7 +20,7 @@ on:
         default: ""
 
 env:
-  RELEASES_REPO: dazcookiez/toolbox-releases
+  RELEASES_REPO: dazcookiez/toolbox_releases
 
 jobs:
   build:
