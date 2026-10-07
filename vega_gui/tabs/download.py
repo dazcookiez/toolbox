@@ -4,6 +4,7 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 
 from vega_backend import default_download_dir
+from vega_backend._common import VEGA6_GROUPS
 
 from ..theme import ACCENT_BLUE, ERROR_COLOR, MUTED_TEXT, OK_COLOR, WARN_COLOR, WHITE_BG, WINDOW_BG
 from ..utils import format_bytes, format_eta, format_speed
@@ -48,7 +49,7 @@ class DownloadTab(ttk.Frame):
     def wants_vega6_extract(self, items):
         if not self.auto_extract_var.get():
             return False
-        return any(item.get("group") == "VEGA6 PROD" and item.get("filename", "").lower().endswith(".zip") for item in items)
+        return any(item.get("group") in VEGA6_GROUPS and item.get("filename", "").lower().endswith(".zip") for item in items)
 
     def build_ui(self):
         self.columnconfigure(0, weight=3)
@@ -165,7 +166,7 @@ class DownloadTab(ttk.Frame):
 
         info_panel(
             action_frame,
-            "Les liens fixes sont intégrés au logiciel. La liste VEGA6/PROD est relue sur le serveur lors de l'actualisation.",
+            "Les liens fixes sont intégrés au logiciel. Les listes VEGA6 PROD et BETA sont relues sur le serveur lors de l'actualisation.",
             wraplength=280,
         ).grid(row=5, column=0, sticky="ew", pady=(12, 0))
 
@@ -612,6 +613,7 @@ class CompactDownloadTab(DownloadTab):
         "Visual C++": 2,
         "VEGA": 3,
         "VEGA6 PROD": 4,
+        "VEGA6 BETA": 5,
     }
 
     def build_ui(self):
@@ -665,7 +667,7 @@ class CompactDownloadTab(DownloadTab):
 
         info_panel(
             target_frame,
-            "Si un paquet VEGA6/PROD est téléchargé, il peut être décompressé automatiquement dans la racine Vega choisie. "
+            "Si un paquet VEGA6 (PROD ou BETA) est téléchargé, il peut être décompressé automatiquement dans la racine Vega choisie. "
             "Le dossier vega.dos\\V6 est créé si besoin.",
             wraplength=360,
         ).grid(row=1, column=3, columnspan=2, sticky="ew", padx=(16, 0), pady=(8, 0))
