@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Vega Toolbox (sources)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/script.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "Vega Toolbox (exe buildé)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/vega_toolbox.exe",
+            "console": "integratedTerminal"
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+__pycache__/
+build/
+.idea/
+# Environnements de build du binaire legacy (Python 3.8 x86 / x64)
+.venv-legacy-x64/
+.venv-legacy-x86/
+dist/vega_tool_config.json
+dist/vega_toolbox.exe
+dist/vega_toolbox_dev.exe
+dist/vega_toolbox_legacy_x64.exe
+dist/vega_toolbox_legacy_x86.exe
+dist/vega_toolbox_audit.json
+dist/vega_toolbox_audit.html
+fiscalService.config.json
+.claude/
