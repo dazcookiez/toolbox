@@ -69,8 +69,12 @@ def main():
     info = resolve_vega_folder(vega)
     if info["kind"] == "install":
         bases = info["bases"]
-        if not bases:
-            raise SystemExit(f"Aucune base trouvee dans {vega}\\BDD")
+        if len(bases) != 1:
+            # Evite de tomber sur une vraie base : passer le dossier de la
+            # base copiee directement si BDD en contient plusieurs.
+            raise SystemExit(
+                f"{len(bases)} base(s) dans {vega}\\BDD : passez --vega sur le dossier de la base copiee."
+            )
         base = Path(bases[0]["path"])
     else:
         base = Path(info["base"])
@@ -140,6 +144,7 @@ def main():
             "mdp": "", "rep": f"\\\\{host}\\ImpressionsVega$",
         }
         res = ns.write(base, values)
+        first_backup = res["backup"]
         data = ns_path.read_bytes()
         assert b"\r\n" in data and b"\n" not in data.replace(b"\r\n", b""), "fins de ligne CRLF attendues"
         parsed = parse_nomserve(data.decode("cp1252"))
@@ -150,11 +155,19 @@ def main():
             assert res["backup"] and Path(res["backup"]).read_bytes() == original, "sauvegarde attendue"
         st2 = ns.read(base)
         assert st2["is_v6"], "le fichier ecrit doit etre lu comme V6"
-        # Re-ecriture : pas de doublons de cles.
-        ns.write(base, values)
+        if original is not None:
+            # Un ancien fichier V5 ne doit laisser aucune ligne hors section.
+            first_line = data.split(b"\r\n", 1)[0].strip()
+            assert first_line.startswith(b"["), f"ligne parasite en tete : {first_line!r}"
+        # Re-ecriture immediate (meme seconde) : pas de doublons de cles, et
+        # la sauvegarde du fichier d'origine ne doit pas etre ecrasee.
+        res2 = ns.write(base, values)
         text = ns_path.read_bytes().decode("cp1252")
         assert text.upper().count("SERVEUR=") == 1, text
-        return f"backup={res['backup']}"
+        if original is not None:
+            assert res2["backup"] != first_backup, "sauvegarde ecrasee"
+            assert Path(first_backup).read_bytes() == original, "sauvegarde d'origine perdue"
+        return f"backup={first_backup}"
     check("nomserve : ecriture V6 + sauvegarde + relecture", t_ns_write)
 
     # --- Fichiers ouverts ---

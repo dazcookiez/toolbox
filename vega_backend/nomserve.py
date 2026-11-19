@@ -115,7 +115,9 @@ def build_nomserve(values):
 
 def merge_nomserve(existing_text, values):
     # Met a jour les cles connues dans un fichier existant, sans toucher au reste.
-    if not (existing_text or "").strip():
+    # Fichier vide ou encore au format V5 (pas de [BDD HFCS]) : on repart
+    # d'un fichier V6 propre. L'ancien contenu reste dans la sauvegarde.
+    if (SECTION_BDD.upper(), "SERVEUR") not in parse_nomserve(existing_text or ""):
         return build_nomserve(values)
 
     wanted = {}
@@ -280,10 +282,12 @@ class NomserveManager:
             # Seule l'IP est reprise du V5 : le port V6 reste 4900 par defaut
             # (le moteur HFSQL V6 n'utilise pas forcement le port du V5).
             ip = find_ipv4(state.get("v5_text", ""))[0]
-            if not ip and state.get("text") and not state.get("is_v6"):
-                ip = find_ipv4(state.get("text", ""))[0]
             if ip:
-                host, source = ip, "ancien nomserve V5"
+                host, source = ip, "ancien nomserve V5 (vega.dos\\V6\\nomserve-v5)"
+            elif state.get("text") and not state.get("is_v6"):
+                ip = find_ipv4(state.get("text", ""))[0]
+                if ip:
+                    host, source = ip, "nomserve actuel (format V5)"
         if not host:
             unc = _unc_host(base)
             if unc:
@@ -322,7 +326,13 @@ class NomserveManager:
             backup_dir = state_dir / "nomserve"
             backup_dir.mkdir(parents=True, exist_ok=True)
             hide_windows_path(state_dir)
+            # Jamais d'ecrasement : deux enregistrements dans la meme seconde
+            # perdraient sinon la sauvegarde du fichier d'origine.
             backup = backup_dir / f"nomserve_{stamp}.txt"
+            counter = 1
+            while backup.exists():
+                backup = backup_dir / f"nomserve_{stamp}_{counter}.txt"
+                counter += 1
             shutil.copy2(str(path), str(backup))
             self.logger.info(f"Sauvegarde de l'ancien nomserve : {backup}")
         content = merge_nomserve(existing, values)
