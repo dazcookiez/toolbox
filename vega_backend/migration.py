@@ -25,6 +25,100 @@ from ._common import (
     windows_case_insensitive,
 )
 
+def list_vega_bases(install_root):
+    # Enumere les bases d'un dossier VegaCS/VegaHF : sous-dossiers de BDD/.
+    candidate = Path(install_root)
+    bdd_dir = candidate / "BDD"
+    bases = []
+    try:
+        if bdd_dir.is_dir():
+            for sub in bdd_dir.iterdir():
+                try:
+                    # Une base Vega = sous-dossier de BDD/ qui n'est
+                    # pas un dossier systeme HFSQL (__JNL, __System...)
+                    # et qui contient au moins un fichier metier
+                    # (.DAT, .fic, .wx, ou un .exe comme vega.exe,
+                    # vega6.exe, Dialoweb.exe, etc.). Le critere
+                    # "vega.exe" strict ratait les installs HFSQL
+                    # avec uniquement des fichiers de donnees, ou
+                    # les bases Vega6 ou l'exe s'appelle vega6.exe.
+                    if not sub.is_dir():
+                        continue
+                    if sub.name.startswith("__"):
+                        continue
+                    has_data = False
+                    for entry in sub.iterdir():
+                        if entry.is_file() and entry.suffix.lower() in (
+                            ".dat", ".fic", ".wx", ".exe", ".ndx", ".mmo"
+                        ):
+                            has_data = True
+                            break
+                    if has_data:
+                        bases.append({"name": sub.name, "path": sub})
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return bases
+
+
+def install_root_for_base(base):
+    # C:\VEGACS\BDD\MAIN -> C:\VEGACS (None si la base n'est pas sous un BDD).
+    base = Path(base)
+    if base.parent.name.upper() == "BDD":
+        return base.parent.parent
+    return None
+
+
+def resolve_vega_folder(folder):
+    # Interprete un dossier choisi a la main par l'utilisateur :
+    #   - dossier VegaCS/VegaHF (contient BDD) -> {"kind": "install", bases: [...]}
+    #   - dossier BDD lui-meme                 -> idem, sur son parent
+    #   - dossier d'une base (ex. BDD\MAIN)    -> {"kind": "base", base: Path}
+    folder = Path(folder)
+    if not folder.is_dir():
+        raise OperationError(f"Dossier introuvable : {folder}")
+    if folder.name.upper() == "BDD" and folder.parent != folder:
+        folder = folder.parent
+    try:
+        has_bdd = any(
+            entry.is_dir() and entry.name.upper() == "BDD" for entry in folder.iterdir()
+        )
+    except OSError as exc:
+        raise OperationError(f"Lecture de {folder} impossible : {exc}") from exc
+    if has_bdd:
+        # Windows ignore la casse : folder / "BDD" couvre aussi "Bdd".
+        bases = list_vega_bases(folder)
+        return {"kind": "install", "install_root": folder, "bases": bases}
+
+    looks_like_base = install_root_for_base(folder) is not None
+    if not looks_like_base:
+        try:
+            for entry in folder.iterdir():
+                if entry.is_dir() and entry.name.lower() == "vega.dos":
+                    looks_like_base = True
+                    break
+                if entry.is_file() and entry.suffix.lower() in (".exe", ".fic", ".dat", ".ndx", ".wx"):
+                    looks_like_base = True
+                    break
+                if entry.is_file() and entry.name.lower() == "nomserve.txt":
+                    looks_like_base = True
+                    break
+        except OSError:
+            pass
+    if looks_like_base:
+        return {
+            "kind": "base",
+            "install_root": install_root_for_base(folder),
+            "base": folder,
+            "bases": [{"name": folder.name, "path": folder}],
+        }
+    raise OperationError(
+        "Ce dossier ne ressemble ni à un dossier Vega (contenant BDD) ni à une base Vega "
+        "(contenant vega.exe / vega.dos). Choisissez le dossier VegaCS ou le dossier de la base."
+    )
+
+
 class MigrationAborted(Exception):
     # Levee quand l'utilisateur choisit d'annuler la migration face a un fichier
     # verrouille. Declenche un retour arriere complet dans run_migration.
@@ -341,37 +435,7 @@ class MigrationManager:
                     pass
 
             for candidate in candidates:
-                bdd_dir = candidate / "BDD"
-                bases = []
-                try:
-                    if bdd_dir.is_dir():
-                        for sub in bdd_dir.iterdir():
-                            try:
-                                # Une base Vega = sous-dossier de BDD/ qui n'est
-                                # pas un dossier systeme HFSQL (__JNL, __System...)
-                                # et qui contient au moins un fichier metier
-                                # (.DAT, .fic, .wx, ou un .exe comme vega.exe,
-                                # vega6.exe, Dialoweb.exe, etc.). Le critere
-                                # "vega.exe" strict ratait les installs HFSQL
-                                # avec uniquement des fichiers de donnees, ou
-                                # les bases Vega6 ou l'exe s'appelle vega6.exe.
-                                if not sub.is_dir():
-                                    continue
-                                if sub.name.startswith("__"):
-                                    continue
-                                has_data = False
-                                for entry in sub.iterdir():
-                                    if entry.is_file() and entry.suffix.lower() in (
-                                        ".dat", ".fic", ".wx", ".exe", ".ndx", ".mmo"
-                                    ):
-                                        has_data = True
-                                        break
-                                if has_data:
-                                    bases.append({"name": sub.name, "path": sub})
-                            except Exception:
-                                continue
-                except Exception:
-                    pass
+                bases = list_vega_bases(candidate)
                 results.append({
                     "root": candidate,
                     "on_network": on_network,

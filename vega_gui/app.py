@@ -25,6 +25,8 @@ from vega_backend import (
 )
 from vega_backend.hfsql_installer import HfsqlInstallerManager
 from vega_backend.cerberit import CerberitManager
+from vega_backend.nomserve import NomserveManager
+from vega_backend.open_files import OpenFilesManager
 from vega_security import (
     consume_skip_login_once,
     load_screen_mode_override,
@@ -42,6 +44,7 @@ from .tabs.impressions import ImpressionsTab
 from .tabs.hfsql import HfsqlTab
 from .tabs.cerberit import CerberitTab
 from .tabs.migration import MigrationTab
+from .tabs.nomserve import NomserveTab
 from .tabs.pc_info import PcInfoTab
 from .tabs.smtp_test import SmtpTestTab
 from .theme import (
@@ -104,6 +107,8 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
         self.pc_info = PcInfoManager(self.logger)
         self.hfsql_installer = HfsqlInstallerManager(self.logger)
         self.cerberit = CerberitManager(self.logger)
+        self.nomserve = NomserveManager(self.logger)
+        self.open_files = OpenFilesManager(self.logger)
         self.audit = AuditLogger(self.logger, tool_version=APP_VERSION)
         # Audit auto de TOUTES les lignes de log : chaque info/warn/error
         # remonte dans le journal d'audit avec un statut adapte.
@@ -381,6 +386,7 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
         # Enregistrement des modules dans la stack.
         self._register_module("home", HomeView)
         self._register_module("migration", MigrationTab)
+        self._register_module("nomserve", NomserveTab)
         self._register_module("impressions", ImpressionsTab)
         self._register_module("firewall", FirewallTab)
         self._register_module("fixed_ip", FixedIPTab)
@@ -484,6 +490,7 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
         self.sidebar.add_separator()
         self.sidebar.add_caption("Modules")
         self.sidebar.add_entry("migration", "Migration", icon=self.icons.get("arrow_switch"))
+        self.sidebar.add_entry("nomserve", "Nomserve", icon=self.icons.get("notepad"))
         self.sidebar.add_entry("impressions", "Impressions Vega", icon=self.icons.get("impression"))
         self.sidebar.add_entry("firewall", "Pare-feu", icon=self.icons.get("shield"))
         self.sidebar.add_entry("fixed_ip", "IP fixe", icon=self.icons.get("computer"))
@@ -633,6 +640,8 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
             module.refresh_adapters(initial=True)
         elif key == "download" and not getattr(module, "dynamic_loaded", True):
             module.refresh_catalog()
+        elif key == "nomserve":
+            module.ensure_loaded()
 
     def show_home(self):
         self.show_module("home")

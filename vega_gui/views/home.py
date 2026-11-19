@@ -1,7 +1,10 @@
 import tkinter as tk
 from pathlib import Path
+from tkinter import filedialog
 
-from vega_backend import RETAILFORCE_TARGET_VERSION, is_admin
+from vega_backend import RETAILFORCE_TARGET_VERSION, OperationError, is_admin
+from vega_backend.migration import resolve_vega_folder
+from vega_security import load_pinned_vega_root, save_pinned_vega_root
 from vega_backend._compat import os_architecture
 
 from ..theme import (
@@ -44,9 +47,11 @@ class HomeView(HomeChecksMixin, tk.Frame):
         self.root_value_label = None
         self.root_status_label = None
 
-        # Bouton "Bases" de l'accueil : grise tant que "Tout verifier" n'a pas
-        # scanne le poste. Une fois le scan fait (detect_root), il se degrise et
-        # permet de choisir la base a utiliser pour l'ensemble des verifications.
+        # Bouton "Bases" de l'accueil : liste les bases trouvees par "Tout
+        # verifier" + choix manuel d'un dossier + retour a la detection auto.
+        # La base choisie est memorisee (vega_security.save_pinned_vega_root)
+        # et pilote tout l'outil (Migration, Nettoyage, Telechargement,
+        # Nomserve, HFSQL, audit).
         self.home_bases_button = None
         self._detected_roots = []
 
@@ -104,8 +109,8 @@ class HomeView(HomeChecksMixin, tk.Frame):
         ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(10, 0))
 
     def build_root_panel(self):
-        # Racine Vega : auto-detectee, affichee en lecture seule. Modification dans l'onglet Migration.
-        panel = tk.LabelFrame(self, text="Racine Vega détectée", padx=12, pady=10, bg=WINDOW_BG)
+        # Racine Vega : auto-detectee ou choisie a la main (bouton "Choisir...").
+        panel = tk.LabelFrame(self, text="Racine Vega", padx=12, pady=10, bg=WINDOW_BG)
         panel.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         panel.columnconfigure(0, weight=1)
         self.root_panel_frame = panel
@@ -133,6 +138,17 @@ class HomeView(HomeChecksMixin, tk.Frame):
             wraplength=760,
         )
         self.root_status_label.grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+        # Choix manuel : dossier VegaCS (on liste ses bases) ou dossier d'une
+        # base (ex. C:\VEGACS\BDD\MAIN). Utile pour les hotels multi-bases ou
+        # un Vega installe ailleurs que sur C:.
+        tool_button(
+            panel,
+            text="Choisir...",
+            command=self.choose_root_manually,
+            image=self.app.icons.get("parcourir"),
+            anchor="center",
+        ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(10, 0))
 
     def build_status_panel(self):
         # Section etat du poste : 6 lignes en lecture seule + bouton "Tout verifier" en bas.
@@ -172,7 +188,6 @@ class HomeView(HomeChecksMixin, tk.Frame):
             command=self.show_bases_menu,
             image=self.app.icons.get("database"),
             anchor="center",
-            state="disabled",
         )
         self.home_bases_button.pack(side="right", padx=(0, 6))
 
@@ -486,13 +501,12 @@ class HomeView(HomeChecksMixin, tk.Frame):
                     "is_current": (base_path == current),
                 })
 
-        if not entries:
-            self.set_root_status(
-                "Aucune base Vega détectée sur ce poste.", WARN_COLOR,
-            )
-            return
-
         menu = tk.Menu(self, tearoff=0)
+        if not entries:
+            menu.add_command(
+                label="Aucune base détectée (cliquez « Tout vérifier »)",
+                state="disabled",
+            )
         for entry in entries:
             label = ("✓ " + entry["label"]) if entry["is_current"] else entry["label"]
             state = "disabled" if entry["on_network"] else "normal"
@@ -500,6 +514,13 @@ class HomeView(HomeChecksMixin, tk.Frame):
                 label=label,
                 command=lambda e=entry: self._select_home_base(e),
                 state=state,
+            )
+        menu.add_separator()
+        menu.add_command(label="Choisir un dossier...", command=self.choose_root_manually)
+        if load_pinned_vega_root():
+            menu.add_command(
+                label="Revenir à la détection automatique",
+                command=self.reset_root_to_auto,
             )
         try:
             x = self.home_bases_button.winfo_rootx()
@@ -511,8 +532,85 @@ class HomeView(HomeChecksMixin, tk.Frame):
     def _select_home_base(self, entry):
         # Applique la base choisie a tout l'outil (vega_root_var partagee avec
         # Migration -> declenche la re-verification cote Migration via son trace).
-        self.vega_root_var.set(entry["path"])
-        self.set_root_status(f"Base sélectionnée : {entry['label']}", OK_COLOR)
+        self.apply_vega_base(entry["path"], f"Base sélectionnée : {entry['label']}")
+
+    # ---------- Choix manuel de la base Vega ----------
+
+    def choose_root_manually(self):
+        # Ouvre un selecteur de dossier. Accepte :
+        #   - le dossier VegaCS/VegaHF (ou son BDD) : on liste ses bases, choix
+        #     demande s'il y en a plusieurs ;
+        #   - le dossier de la base elle-meme (ex. C:\VEGACS\BDD\MAIN).
+        current = self.vega_root_var.get().strip()
+        initial = current if current and Path(current).is_dir() else "C:\\"
+        selected = filedialog.askdirectory(
+            parent=self,
+            title="Choisir le dossier VegaCS ou le dossier de la base (ex. BDD\\MAIN)",
+            initialdir=initial,
+        )
+        if not selected:
+            return
+        try:
+            info = resolve_vega_folder(selected)
+        except OperationError as exc:
+            self.set_root_status(str(exc), ERROR_COLOR)
+            self.app.set_status("Dossier Vega non reconnu.", ERROR_COLOR)
+            return
+        except Exception as exc:
+            self.set_root_status(f"Lecture du dossier impossible : {exc}", ERROR_COLOR)
+            return
+
+        bases = info.get("bases") or []
+        if info["kind"] == "base":
+            base_path = str(info["base"])
+        elif not bases:
+            self.set_root_status(
+                f"Aucune base trouvée dans {info['install_root']}\\BDD. "
+                "Choisissez directement le dossier de la base.",
+                ERROR_COLOR,
+            )
+            return
+        elif len(bases) == 1:
+            base_path = str(bases[0]["path"])
+        else:
+            base_path = self._prompt_choice(
+                "Choisir la base Vega",
+                f"Plusieurs bases dans {info['install_root']}\\BDD.\nSélectionnez celle à utiliser :",
+                [(b["name"], str(b["path"])) for b in bases],
+            )
+            if not base_path:
+                return
+        self.apply_vega_base(base_path, f"Choix manuel : base « {Path(base_path).name} » ({base_path})")
+
+    def apply_vega_base(self, base_path, status_text):
+        # Point unique pour fixer la base : StringVar partagee (Migration,
+        # Nettoyage, Telechargement, Nomserve, audit), memorisation pour les
+        # prochains lancements, et repertoire serveur de l'onglet HFSQL.
+        base_path = str(base_path)
+        self.vega_root_var.set(base_path)
+        save_pinned_vega_root(base_path)
+        self.set_root_status(status_text + " — mémorisé, utilisé par tout l'outil.", OK_COLOR)
+        self.app.logger.info(f"Base Vega choisie : {base_path}")
+        self._notify_hfsql_base(base_path)
+        self.check_structure()
+
+    def reset_root_to_auto(self):
+        save_pinned_vega_root(None)
+        self.app.logger.info("Base Vega : retour à la détection automatique.")
+        self.detect_root()
+
+    def _notify_hfsql_base(self, base_path):
+        # L'onglet HFSQL est construit a la demande : s'il ne l'est pas encore,
+        # il lira la base memorisee a sa construction.
+        host = (getattr(self.app, "modules", None) or {}).get("hfsql")
+        if host is None or getattr(host, "content", None) is None:
+            return
+        method = getattr(host.content, "follow_vega_base", None)
+        if callable(method):
+            try:
+                method(base_path)
+            except Exception:
+                pass
 
     def _arrow_combo_challenge(self):
         # 2e confirmation : l'utilisateur doit reproduire au clavier une
@@ -797,6 +895,15 @@ class HomeView(HomeChecksMixin, tk.Frame):
             shared_var.set(previous)
         if self.root_value_label:
             self.root_value_label.configure(textvariable=shared_var)
+        pinned = load_pinned_vega_root()
+        if pinned:
+            if shared_var.get().strip() != pinned:
+                shared_var.set(pinned)
+            self.set_root_status(
+                f"Choix manuel mémorisé : base « {Path(pinned).name} ». "
+                "« Bases ▾ » pour revenir à la détection automatique.",
+                OK_COLOR,
+            )
 
     def refresh(self):
         # Pas de check automatique : l'utilisateur clique sur "Tout vérifier" pour declencher.

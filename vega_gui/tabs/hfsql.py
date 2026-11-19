@@ -18,6 +18,8 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 
 from vega_backend import is_admin
+from vega_backend.migration import install_root_for_base
+from vega_security import load_pinned_vega_root
 from vega_backend.hfsql_installer import (
     DEFAULT_HFSQL_PORT,
     DEFAULT_HFSQL_VERSION,
@@ -555,7 +557,34 @@ class HfsqlTab(ttk.Frame):
             self._status_badge_var.set("✕ HFSQL Serveur n'est pas installé sur ce poste")
             self._status_badge.configure(fg=ERROR_COLOR)
 
+    def _pinned_install_root(self):
+        # Dossier VegaCS/VegaHF de la base choisie a la main sur l'Accueil.
+        pinned = load_pinned_vega_root()
+        if not pinned:
+            return None
+        install = install_root_for_base(pinned)
+        if install is not None and install.is_dir():
+            return str(install)
+        return None
+
+    def follow_vega_base(self, base_path):
+        # Appele par l'Accueil quand l'utilisateur choisit une base : le
+        # repertoire serveur HFSQL suit (dossier parent de BDD).
+        install = install_root_for_base(base_path)
+        if install is None or not install.is_dir():
+            return
+        self._selected_candidate.set(str(install))
+        self._vega_status_var.set("Répertoire serveur aligné sur la base choisie à l'accueil.")
+        self._set_buttons_enabled(True)
+
     def _apply_candidates(self, candidates):
+        pinned_install = self._pinned_install_root()
+        if pinned_install and not self._selected_candidate.get().strip():
+            # Premier scan : le choix de l'Accueil passe avant la detection
+            # (pas de popup). Un choix fait ensuite dans cet onglet est garde.
+            self._selected_candidate.set(pinned_install)
+            self._vega_status_var.set("Répertoire serveur aligné sur la base choisie à l'accueil.")
+            return
         valid = [c for c in candidates if c["valid"]]
         if not valid:
             # Conserve le _selected_candidate precedent si on en avait un

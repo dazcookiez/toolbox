@@ -129,6 +129,31 @@ def save_last_vega_root(root_path):
     save_config({"last_vega_root": str(root_path)})
 
 
+def load_pinned_vega_root():
+    # Base Vega choisie explicitement par l'utilisateur (Accueil > Choisir /
+    # Bases). Tant qu'elle existe, "Tout verifier" ne la remplace pas par la
+    # detection automatique. Retourne None si aucun choix ou dossier disparu.
+    data = load_config()
+    if not data.get("vega_root_pinned"):
+        return None
+    value = data.get("last_vega_root")
+    if isinstance(value, str) and value.strip():
+        try:
+            if Path(value.strip()).is_dir():
+                return value.strip()
+        except Exception:
+            return None
+    return None
+
+
+def save_pinned_vega_root(root_path):
+    # root_path None -> retour a la detection automatique.
+    if root_path:
+        save_config({"last_vega_root": str(root_path), "vega_root_pinned": True})
+    else:
+        save_config({"vega_root_pinned": False})
+
+
 def load_screen_mode_override():
     # Override manuel du mode petit / grand ecran. None = auto.
     value = load_config().get("screen_mode")
