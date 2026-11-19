@@ -12,7 +12,14 @@ Pre-requis cote View :
     self._set_migration_var  (sync valeur prerequis vers Migration)
     self._prompt_choice      (popup modal radio)
 """
+from pathlib import Path
+
+from vega_security import load_pinned_vega_root
+
 from ..theme import ERROR_COLOR, MUTED_TEXT, OK_COLOR, WARN_COLOR
+
+# Valeur speciale ajoutee aux popups de choix : "choisir un autre dossier".
+_MANUAL_CHOICE = "__manual__"
 
 
 class HomeChecksMixin:
@@ -175,20 +182,36 @@ class HomeChecksMixin:
         # Memorise le scan pour alimenter le menu deroulant "Bases" de l'accueil
         # et degrise le bouton : le poste a maintenant ete scanne.
         self._detected_roots = results
-        if getattr(self, "home_bases_button", None) is not None:
-            has_base = any(r.get("bases") for r in results)
-            try:
-                self.home_bases_button.configure(state="normal" if has_base else "disabled")
-            except Exception:
-                pass
+
+        # Base choisie a la main (et memorisee) : la detection ne l'ecrase pas.
+        # Les bases trouvees restent disponibles dans "Bases".
+        pinned = load_pinned_vega_root()
+        if pinned:
+            if self.vega_root_var.get().strip() != pinned:
+                self.vega_root_var.set(pinned)
+            found = sum(len(r.get("bases") or []) for r in results)
+            self.set_root_status(
+                f"Choix manuel conservé : base « {Path(pinned).name} » "
+                f"({found} base(s) détectée(s) sur le poste, voir « Bases ▾ »).",
+                OK_COLOR,
+            )
+            return
+
         local_results = [r for r in results if not r.get("on_network")]
         network_results = [r for r in results if r.get("on_network")]
 
         if not results:
             self.set_root_status(
-                "Aucune racine Vega détectée. Renseignez-la manuellement dans l'onglet Migration.",
+                "Aucune racine Vega détectée. Cliquez « Choisir... » pour indiquer le dossier VegaCS ou la base.",
                 WARN_COLOR,
             )
+            if getattr(self.app, "_tutorial", None) is None and self.app.confirm_action(
+                "Racine Vega",
+                "Aucune installation Vega n'a été détectée automatiquement.\n\n"
+                "Voulez-vous choisir le dossier maintenant ?\n"
+                "(dossier VegaCS, ou dossier de la base, ex. C:\\VEGACS\\BDD\\MAIN)",
+            ):
+                self.choose_root_manually()
             return
 
         if not local_results and network_results:
@@ -210,14 +233,16 @@ class HomeChecksMixin:
                         options.append((f"{root_path} > {base['name']}", str(base["path"])))
                 else:
                     options.append((f"{root_path} (sans base BDD)", str(root_path)))
+            options.append(("Autre dossier... (choisir manuellement)", _MANUAL_CHOICE))
             chosen_value = self._prompt_choice(
                 "Plusieurs racines Vega détectées",
                 "Plusieurs installations Vega ont été trouvées sur ce poste.\nSélectionnez celle à utiliser :",
                 options,
             )
-            if chosen_value:
-                self.vega_root_var.set(chosen_value)
-                self.set_root_status(f"Sélectionné : {chosen_value}", OK_COLOR)
+            if chosen_value == _MANUAL_CHOICE:
+                self.choose_root_manually()
+            elif chosen_value:
+                self.apply_vega_base(chosen_value, f"Sélectionné : {chosen_value}")
             else:
                 self.set_root_status("Aucune racine sélectionnée.", WARN_COLOR)
             return
@@ -227,15 +252,17 @@ class HomeChecksMixin:
         bases = chosen.get("bases", [])
         if len(bases) > 1:
             options = [(b["name"], str(b["path"])) for b in bases]
+            options.append(("Autre dossier... (choisir manuellement)", _MANUAL_CHOICE))
             chosen_value = self._prompt_choice(
                 "Plusieurs bases Vega détectées",
-                f"Plusieurs bases ont été trouvées dans {chosen['root']}\\BDD.\nSélectionnez la base à migrer :",
+                f"Plusieurs bases ont été trouvées dans {chosen['root']}\\BDD.\nSélectionnez la base à utiliser :",
                 options,
             )
-            if chosen_value:
-                self.vega_root_var.set(chosen_value)
+            if chosen_value == _MANUAL_CHOICE:
+                self.choose_root_manually()
+            elif chosen_value:
                 base_name = next((n for n, p in options if p == chosen_value), "?")
-                self.set_root_status(f"Sélectionné : base « {base_name} »", OK_COLOR)
+                self.apply_vega_base(chosen_value, f"Sélectionné : base « {base_name} »")
             else:
                 self.vega_root_var.set(str(chosen["root"]))
                 self.set_root_status("Aucune base sélectionnée.", WARN_COLOR)
