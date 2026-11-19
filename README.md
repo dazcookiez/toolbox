@@ -231,7 +231,7 @@ toolbox/
 
 | | Module | Description |
 |:-:|:--|:--|
-| 🔄 | **Migration** | Vérification des prérequis, migration VEGA5 → VEGA6 avec sauvegarde, retour arrière, pilotage du service HFSQL, sélection de base (**Bases ▾**). Sur anomalie — fichier verrouillé ou élément manquant — une popup propose de continuer, d'ignorer les suivants, ou de **tout annuler** (rollback complet) |
+| 🔄 | **Migration** | Vérification des prérequis, migration VEGA5 → VEGA6 avec sauvegarde, retour arrière, pilotage du service HFSQL, sélection de base (**Bases ▾**). Bouton **Forcer la fermeture** : liste les fichiers de la base ouverts par les postes (partage réseau ; `Get-SmbOpenFile`, ou `openfiles` sous Windows 7) et les `vega.exe` lancés sur ce poste depuis la base, puis les ferme après confirmation. Sur anomalie — fichier verrouillé ou élément manquant — une popup propose de continuer, d'ignorer les suivants, ou de **tout annuler** (rollback complet) |
 | 📝 | **Nomserve** | Lit le `nomserve.txt` de la base et crée / met à jour le format **V6** (`[BDD HFCS]` SERVEUR, BASE, UTILISATEUR, MDP + `[REPIMPRESSION]` rep). Pré-remplissage : BASE = nom du dossier de la base, IP serveur tirée de l'ancien nomserve V5 (`vega.dos\V6\nomserve-v5`) ou de l'IP du poste, port 4900, partage `\\IP\ImpressionsVega$`. Aperçu avant écriture, sauvegarde de l'ancien fichier dans `.vega_tool_state\nomserve` |
 | 🖨 | **Impressions Vega** | Vérifie et répare `C:\ImpressionsVega` et le partage `ImpressionsVega$`, côté NTFS **et** SMB |
 | 🛡 | **Pare-feu** | Règles `Service Fiscal RetailForce` (TCP 7678) et `HFSQL Server` (TCP 4900), avec lecture directe du registre |
@@ -567,7 +567,7 @@ self.logger.error("Échec de l'opération")
 
 | Version | Faits marquants |
 |:-:|:--|
-| **5.0.3** | **Racine Vega manuelle** : bouton **Choisir...** sur l'Accueil (dossier VegaCS ou dossier de la base), proposé aussi quand aucune base ou plusieurs bases sont détectées ; choix mémorisé et appliqué à tout l'outil (Migration, Nettoyage, Téléchargement, HFSQL, audit). Nouvel onglet **Nomserve** : lecture du `nomserve.txt` et création / édition du format V6 pré-rempli |
+| **5.0.3** | **Racine Vega manuelle** : bouton **Choisir...** sur l'Accueil (dossier VegaCS ou dossier de la base), proposé aussi quand aucune base ou plusieurs bases sont détectées ; choix mémorisé et appliqué à tout l'outil (Migration, Nettoyage, Téléchargement, HFSQL, audit). Nouvel onglet **Nomserve** : lecture du `nomserve.txt` et création / édition du format V6 pré-rempli. **Migration** : bouton « Forcer la fermeture » des fichiers ouverts dans la base |
 | **5.0.2** | **Téléchargement** : nouveau canal **VEGA6 BETA** (`VEGA6/PROD/BETA/`) listé à côté de PROD, extraction automatique dans `vega.dos\V6`. **Reprise du projet sur GitHub** : auto-mise à jour via GitHub Releases avec vérification SHA-256, nom d'exe fixe `vega_toolbox.exe` rétabli, build et publication des 3 binaires par GitHub Actions. Contact support : Cristian. *Postes en 5.0.0 / 5.0.1 : mise à jour manuelle unique* |
 | **5.0.1** | **RetailForce** 1.11.2 → 1.11.21.7255 (x64 + x86). **Login** : règle locale `!…!` (≥ 4 caractères) à la place de `CryptoTools.dll` — temporaire |
 | **5.0.0** | **Support Windows 7 SP1 → Server 2012** : second binaire x86/x64 en Python 3.8, couche de compatibilité, UCRT embarqué, canal de mise à jour dédié. Détection automatique d'architecture pour Notepad++/JsonTools et RetailForce. Désinstallation CerberIT en cascade. Journal de crash. *Correctifs :* ports HFSQL, raccourcis clavier invalides, détection HFSQL 32 bits |

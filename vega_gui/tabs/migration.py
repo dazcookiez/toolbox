@@ -124,6 +124,25 @@ class MigrationTab(ttk.Frame):
             anchor="center",
         )
         self.hfsql_button.pack(side="right")
+
+        # Fichiers de la base ouverts par les postes (partage reseau) ou par
+        # un vega.exe lance sur ce poste : bloquent la migration / le
+        # nettoyage. Liste puis fermeture forcee apres confirmation.
+        open_row = tk.Frame(prereq_frame, bg=WINDOW_BG)
+        open_row.grid(row=2, column=0, sticky="ew", pady=(6, 0))
+        tk.Label(
+            open_row,
+            text="Fichiers ouverts dans la base (postes, vega.exe)",
+            bg=WINDOW_BG,
+        ).pack(side="left", padx=(4, 0))
+        self.open_files_button = tool_button(
+            open_row,
+            text="Forcer la fermeture",
+            command=self.force_close_open_files,
+            width=18,
+            anchor="center",
+        )
+        self.open_files_button.pack(side="right")
         # Etat HFSQL connu : "running" | "stopped" | "missing" | None (inconnu).
         # Pas de lecture automatique : etat ajuste apres une action ou via la propagation depuis l'accueil.
         self._hfsql_state = None
@@ -258,6 +277,68 @@ class MigrationTab(ttk.Frame):
             menu.tk_popup(x, y)
         finally:
             menu.grab_release()
+
+    def force_close_open_files(self):
+        root = self.current_root()
+        if not root:
+            return
+        if not root.is_dir():
+            self.app.set_status("Racine Vega introuvable.", ERROR_COLOR)
+            return
+        self.app.run_task(
+            "Recherche des fichiers ouverts",
+            lambda: self.app.open_files.list_open(root),
+            on_success=self._confirm_close_open_files,
+            key="open_files",
+        )
+
+    def _confirm_close_open_files(self, state):
+        files = state.get("files") or []
+        procs = state.get("processes") or []
+        if not files and not procs:
+            self.app.set_status("Aucun fichier ouvert dans la base.", OK_COLOR)
+            return
+        lines = []
+        for proc in procs:
+            lines.append(f"  • Processus {proc.get('name')} (PID {proc.get('pid')}) sur ce poste")
+        for f in files:
+            who = f.get("client") or f.get("user") or "?"
+            lines.append(f"  • {Path(f['path']).name} — {who}")
+        shown = lines[:12]
+        if len(lines) > 12:
+            shown.append(f"  ... et {len(lines) - 12} autre(s)")
+        if not self.app.confirm_action(
+            APP_TITLE,
+            f"{len(files)} fichier(s) ouvert(s) par le réseau et {len(procs)} processus "
+            f"dans :\n{state['base']}\n\n" + "\n".join(shown) + "\n\n"
+            "Les postes connectés perdront leur session Vega sans enregistrer.\n"
+            "Forcer la fermeture ?",
+        ):
+            return
+
+        def on_success(result):
+            if result["failed"]:
+                self.app.set_status(
+                    f"{result['closed']} élément(s) fermé(s), {len(result['failed'])} non fermé(s) (voir le journal).",
+                    WARN_COLOR,
+                )
+            else:
+                self.app.set_status(f"{result['closed']} élément(s) fermé(s).", OK_COLOR)
+            try:
+                self.app.audit.log_action(
+                    "force_close_open_files",
+                    status="success" if not result["failed"] else "warning",
+                    details={"base": state["base"], "closed": result["closed"], "failed": len(result["failed"])},
+                )
+            except Exception:
+                pass
+
+        self.app.run_task(
+            "Fermeture forcée des fichiers ouverts",
+            lambda: self.app.open_files.close_all(state),
+            on_success=on_success,
+            key="open_files",
+        )
 
     def on_root_changed(self, *_args):
         self.set_migration_enabled(False)

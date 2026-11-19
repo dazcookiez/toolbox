@@ -26,6 +26,7 @@ from vega_backend import (
 from vega_backend.hfsql_installer import HfsqlInstallerManager
 from vega_backend.cerberit import CerberitManager
 from vega_backend.nomserve import NomserveManager
+from vega_backend.open_files import OpenFilesManager
 from vega_security import (
     consume_skip_login_once,
     load_screen_mode_override,
@@ -107,6 +108,7 @@ class VegaToolApp(TaskRunnerMixin, StatusBarMixin, tk.Tk):
         self.hfsql_installer = HfsqlInstallerManager(self.logger)
         self.cerberit = CerberitManager(self.logger)
         self.nomserve = NomserveManager(self.logger)
+        self.open_files = OpenFilesManager(self.logger)
         self.audit = AuditLogger(self.logger, tool_version=APP_VERSION)
         # Audit auto de TOUTES les lignes de log : chaque info/warn/error
         # remonte dans le journal d'audit avec un statut adapte.
